@@ -19,12 +19,22 @@ The ML models were trained on the [Edge-IIoTset dataset](https://doi.org/10.1109
 
 ## Results
 
-| Model | Training Accuracy | Testing Accuracy | Training Time |
-|---|---|---|---|
-| Random Forest | 100% | 100% | — |
-| SVM (RBF kernel) | 99.9% | 99.9% | 282s |
+| Model | Training Accuracy | Test Accuracy | Test Recall (Attack) | Training Time |
+|---|---|---|---|---|
+| SVM (RBF kernel) | 99.99% | 99.97% | 1.00 | 370s |
+| ANN | 88.8% | 93.1% | — | ~2160s |
+| Random Forest | 100% | 84.2% | 0.00 | 11s |
+| LightGBM | — | — | 0.00 | — |
 
-Both models achieved near-perfect classification on the preprocessed dataset. Random Forest showed complete robustness to feature removal, while SVM accuracy dropped to 99% when the `tcp.connection.rst` feature was excluded, highlighting its importance for attack classification.
+**SVM** was the strongest performer, maintaining high accuracy and near-perfect precision/recall on the held-out test set.
+
+**Random Forest and LightGBM** showed a critical failure on the test set despite high training accuracy — both models predicted all packets as normal traffic, achieving zero recall on the attack class. This is a classic symptom of class imbalance: after preprocessing, normal traffic heavily outnumbered attack samples, causing these models to learn a trivial "always predict normal" strategy that appeared accurate due to the skewed class distribution.
+
+**ANN** achieved 93.1% test accuracy, performing better than tree-based models on this imbalanced dataset.
+
+## Key Finding: Class Imbalance
+
+The Edge-IIoTset dataset required significant preprocessing — many features contained missing or zero values, and after cleaning a large proportion of rows were dropped. This left a heavily imbalanced dataset where normal traffic samples substantially outnumbered attack samples. This imbalance directly caused the RF and LightGBM failures on the test set, and explains why SVM — more robust to imbalance due to its margin-based optimization — outperformed ensemble tree methods here.
 
 ## Repository Structure
 
@@ -37,7 +47,7 @@ Both models achieved near-perfect classification on the preprocessed dataset. Ra
 ├── Collect_and_send.py         # Sensor data collection and TCP transmission to server
 ├── legitimate_client.py        # Simulated legitimate client traffic
 ├── client.sh                   # Shell script to run 100,000 client connections
-├── FinalExp.ipynb              # Extended experiments: ANN, LightGBM, SHAP, ROC curves
+├── ExtraExp.ipynb              # Extended experiments: SVM, RF, ANN, LightGBM, ROC curves
 └── SDP2_26_FinalReport.pdf     # Full project report
 ```
 
@@ -65,15 +75,9 @@ Features used: `frame.time`, `ip.src_host`, `ip.dst_host`, `tcp.ack`, `tcp.ack_r
 
 ## Known Limitations
 
-During real-time deployment, the server produced a high rate of false positives. This is attributed to a feature alignment mismatch between the training data (preprocessed CSV features) and live packet captures (raw Scapy fields). Resolving this alignment is identified as the primary next step for improving deployment reliability.
+**Class imbalance:** Preprocessing significantly reduced the dataset size and left normal traffic heavily overrepresented, causing RF and LightGBM to fail on the attack class entirely. Addressing this with SMOTE or class weighting would be a clear next step.
 
-## Extended Experiments (FinalExp.ipynb)
-
-The notebook includes additional experiments beyond the submitted project:
-- **ANN** — 90% training accuracy, 93% testing accuracy
-- **LightGBM** — trained and evaluated with feature importance analysis
-- **SHAP** — explainability analysis on Random Forest
-- **ROC and Precision-Recall curves** for all models
+**Deployment feature mismatch:** During real-time deployment, the server produced a high rate of false positives due to a feature alignment mismatch between the preprocessed CSV features used during training and the raw fields extracted from live packets via Scapy. Resolving this alignment is the primary blocker for a working real-time system.
 
 ## License
 
